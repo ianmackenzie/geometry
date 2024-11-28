@@ -12,7 +12,7 @@ module Axis2d exposing
     , x, y
     , through, withDirection, throughPoints
     , originPoint, direction
-    , intersectionPoint
+    , intersectionPoint, intersectionWithCircle
     , reverse, moveTo, rotateAround, rotateBy, translateBy, translateIn, mirrorAcross
     , at, at_
     , relativeTo, placeIn
@@ -45,7 +45,7 @@ by an origin point and direction. Axes have several uses, such as:
 
 # Intersection
 
-@docs intersectionPoint
+@docs intersectionPoint, intersectionWithCircle
 
 
 # Transformations
@@ -66,9 +66,9 @@ by an origin point and direction. Axes have several uses, such as:
 
 import Angle exposing (Angle)
 import Direction2d exposing (Direction2d)
-import Geometry.Types as Types exposing (Frame2d)
+import Geometry.Types as Types exposing (Circle2d, Frame2d)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity, Rate)
+import Quantity exposing (Quantity(..), Rate)
 import Vector2d exposing (Vector2d)
 
 
@@ -229,6 +229,48 @@ intersectionPoint axis1 axis2 =
 
         else
             Just (Point2d.along axis2 (distance2 |> Quantity.divideBy -crossProduct))
+
+
+{-| Attempt to find the intersection of an axis with a circle. The two points
+will be in order of signed distance along the axis. Returns `Nothing` if there
+is no intersection.
+-}
+intersectionWithCircle : Circle2d units coordinates -> Axis2d units coordinates -> Maybe ( Point2d units coordinates, Point2d units coordinates )
+intersectionWithCircle (Types.Circle2d { centerPoint, radius }) (Types.Axis2d axis) =
+    let
+        circleCenterToOrigin =
+            Vector2d.from centerPoint axis.originPoint
+
+        (Types.Vector2d cto) =
+            circleCenterToOrigin
+
+        ctoLengthSquared =
+            cto.x ^ 2 + cto.y ^ 2
+
+        (Quantity dotProduct) =
+            Vector2d.componentIn axis.direction circleCenterToOrigin
+
+        (Quantity r) =
+            radius
+
+        inRoot =
+            dotProduct ^ 2 - ctoLengthSquared + r ^ 2
+    in
+    if inRoot < 0 then
+        Nothing
+
+    else
+        let
+            d1 =
+                -dotProduct - sqrt inRoot
+
+            d2 =
+                -dotProduct + sqrt inRoot
+        in
+        Just
+            ( Point2d.along axis (Quantity d1)
+            , Point2d.along axis (Quantity d2)
+            )
 
 
 {-| Reverse the direction of an axis while keeping the same origin point.

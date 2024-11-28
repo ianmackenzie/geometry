@@ -1,6 +1,7 @@
 module Tests.Axis2d exposing
     ( directionExample
     , intersectionPoint
+    , intersectionWithCircle
     , mirrorAcrossExample
     , moveToExample
     , originPointExample
@@ -16,6 +17,7 @@ module Tests.Axis2d exposing
 
 import Angle
 import Axis2d
+import Circle2d
 import Direction2d
 import Expect
 import Frame2d
@@ -214,3 +216,78 @@ intersectionPoint =
                 -- numerically badly behaved)
                 Expect.pass
         )
+
+
+intersectionWithCircle : Test
+intersectionWithCircle =
+    Test.describe "intersectionWithCircle"
+        [ Test.test "no intersection points" <|
+            \_ ->
+                let
+                    sphere =
+                        Circle2d.withRadius (meters 1) (Point2d.meters 0 0)
+
+                    axis =
+                        Axis2d.through (Point2d.meters 6 0) Direction2d.y
+                in
+                Expect.equal (Axis2d.intersectionWithCircle sphere axis) Nothing
+        , Test.test "two intersection points" <|
+            \_ ->
+                let
+                    sphere =
+                        Circle2d.withRadius (meters 1) (Point2d.meters 0 0)
+
+                    axis =
+                        Axis2d.through (Point2d.meters 0 0) Direction2d.y
+                in
+                Expect.equal (Axis2d.intersectionWithCircle sphere axis)
+                    (Just ( Point2d.meters 0 -1, Point2d.meters 0 1 ))
+        , Test.test "the same intersection points" <|
+            \_ ->
+                let
+                    sphere =
+                        Circle2d.withRadius (meters 1) (Point2d.meters 0 0)
+
+                    axis =
+                        Axis2d.through (Point2d.meters 1 0) Direction2d.y
+                in
+                Expect.equal (Axis2d.intersectionWithCircle sphere axis)
+                    (Just ( Point2d.meters 1 0, Point2d.meters 1 0 ))
+        , Test.check2 "intersection points should be on the circle and the axis"
+            Random.axis2d
+            Random.circle2d
+            (\axis circle ->
+                case Axis2d.intersectionWithCircle circle axis of
+                    Just pointPair ->
+                        let
+                            -- An intersection point should be on the circle
+                            -- (have a distance from the circle center point
+                            -- equal to the circle radius), and on the axis
+                            -- (have a zero distance from the axis)
+                            validIntersectionPoint point =
+                                Expect.all
+                                    [ Point2d.distanceFrom (Circle2d.centerPoint circle)
+                                        >> Expect.quantity (Circle2d.radius circle)
+                                    , Point2d.signedDistanceFrom axis
+                                        >> Expect.quantity Quantity.zero
+                                    ]
+                                    point
+                        in
+                        -- Both intersection points should be valid
+                        Expect.all
+                            [ Tuple.first >> validIntersectionPoint
+                            , Tuple.second >> validIntersectionPoint
+                            ]
+                            pointPair
+
+                    Nothing ->
+                        -- If the axis does not intersect the circle, then the
+                        -- absolute distance from the circle center point to the axis
+                        -- should be greater than the radius of the circle (if
+                        -- it was less, then there should be an intersection!)
+                        Circle2d.centerPoint circle
+                            |> Point2d.signedDistanceFrom axis
+                            |> Quantity.abs
+                            |> Expect.quantityGreaterThan (Circle2d.radius circle)
+            )
+        ]
